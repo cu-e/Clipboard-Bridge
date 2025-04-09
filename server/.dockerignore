@@ -1,0 +1,19 @@
+# Исключаем файлы и директории, которые не нужны в контейнере
+.git
+.gradle
+.idea
+.settings
+.vscode
+bin
+build
+out
+logs
+*.log
+*.md
+.DS_Store
+.env
+.env.*
+gradle
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**
+!**/src/test/** 

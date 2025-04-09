@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: clipboard-bridge-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Telegram бот
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-<token>}
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-clipboard_bot}
+      - TELEGRAM_MAIN_USER_ID=${TELEGRAM_MAIN_USER_ID:-6736119854}
+      # JVM и Spring
+      - JAVA_OPTS=-Xms256m -Xmx512m
+      - SPRING_PROFILES_ACTIVE=prod
+    volumes:
+      - server-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - clipboard-bridge-network
+
+volumes:
+  server-logs:
+    driver: local
+
+networks:
+  clipboard-bridge-network:
+    driver: bridge 
