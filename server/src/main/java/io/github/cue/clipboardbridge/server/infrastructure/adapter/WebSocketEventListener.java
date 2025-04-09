@@ -1,7 +1,11 @@
 package io.github.cue.clipboardbridge.server.infrastructure.adapter;
 
-import io.github.cue.clipboardbridge.server.infrastructure.service.ClientSessionService;
-import lombok.extern.slf4j.Slf4j;
+import java.security.Principal;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
@@ -10,11 +14,8 @@ import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 
-import java.security.Principal;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArraySet;
+import io.github.cue.clipboardbridge.server.infrastructure.service.ClientSessionService;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Компонент для отслеживания событий WebSocket/STOMP.
@@ -26,13 +27,10 @@ public class WebSocketEventListener {
 
     private final ClientSessionService sessionService;
     
-    // Хранение уже обработанных событий отключения сессии (sessionId -> timestamp)
     private final Map<String, Long> processedDisconnects = new ConcurrentHashMap<>();
     
-    // Хранение уже отключенных clientId для избежания повторной обработки
     private final Set<String> processedClientIds = new CopyOnWriteArraySet<>();
     
-    // Время хранения информации об обработанных отключениях (мс)
     private static final long DISCONNECT_EVENT_TTL = 10000; // 10 секунд
 
     @Autowired
@@ -55,8 +53,6 @@ public class WebSocketEventListener {
             log.info("Новое WebSocket соединение: {}", clientId);
             sessionService.registerSession(clientId);
             
-            // При новом подключении удаляем clientId из набора обработанных,
-            // чтобы дать возможность обработать событие отключения в будущем
             processedClientIds.remove(clientId);
         } else {
             log.warn("Новое соединение без Principal");
@@ -82,7 +78,6 @@ public class WebSocketEventListener {
             sessionService.updateSession(clientId);
         }
         
-        // Проверяем атрибуты сессии, если Principal не найден
         if (principal == null && headerAccessor.getSessionAttributes() != null) {
             Object sessionIdObj = headerAccessor.getSessionAttributes().get("CLIENT_ID");
             if (sessionIdObj instanceof String) {
@@ -104,43 +99,35 @@ public class WebSocketEventListener {
         StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
         String sessionId = headerAccessor.getSessionId();
         
-        // Проверяем наличие информации о сессии
         if (sessionId == null) {
             log.warn("Получено событие отключения без ID сессии");
             return;
         }
         
-        // Очистка устаревших записей о событиях
         long currentTime = System.currentTimeMillis();
         cleanupExpiredEvents(currentTime);
         
-        // Проверяем, не было ли это событие уже обработано
         if (isAlreadyProcessed(sessionId)) {
             log.debug("Пропуск дублирующегося события отключения для сессии: {}", sessionId);
             return;
         }
         
-        // Получаем client ID
         String clientId = extractClientId(headerAccessor);
         if (clientId == null) {
             log.warn("Соединение WebSocket закрыто для неизвестного клиента (сессия: {})", sessionId);
             return;
         }
         
-        // Проверяем, не был ли этот clientId уже обработан
         if (processedClientIds.contains(clientId)) {
             log.debug("Пропуск дублирующегося события отключения для клиента: {}", clientId);
             return;
         }
         
-        // Обработка события отключения
         log.info("WebSocket соединение закрыто: {} (сессия: {})", clientId, sessionId);
         
-        // Добавляем в обработанные
         markSessionAsProcessed(sessionId, currentTime);
         processedClientIds.add(clientId);
         
-        // Отключаем сессию, если она не была отключена ранее
         if (!sessionService.isSessionDisconnected(clientId)) {
             sessionService.disconnectSession(clientId);
         }
@@ -153,13 +140,11 @@ public class WebSocketEventListener {
      * @return ID клиента или null, если не найден
      */
     private String extractClientId(StompHeaderAccessor headerAccessor) {
-        // Сначала пробуем получить из Principal
         Principal principal = headerAccessor.getUser();
         if (principal != null) {
             return principal.getName();
         }
         
-        // Если Principal не найден, проверяем атрибуты сессии
         Map<String, Object> sessionAttributes = headerAccessor.getSessionAttributes();
         if (sessionAttributes != null) {
             Object clientIdObj = sessionAttributes.get("CLIENT_ID");

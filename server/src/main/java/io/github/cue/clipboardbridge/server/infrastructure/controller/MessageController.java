@@ -1,20 +1,19 @@
 package io.github.cue.clipboardbridge.server.infrastructure.controller;
 
-import io.github.cue.clipboardbridge.server.domain.model.CommandMessage;
-import io.github.cue.clipboardbridge.server.domain.model.ReplyMessage;
-import io.github.cue.clipboardbridge.server.domain.port.MessageProcessor;
-import lombok.extern.slf4j.Slf4j;
+import java.security.Principal;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.simp.annotation.SendToUser;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.security.Principal;
+import io.github.cue.clipboardbridge.server.domain.model.CommandMessage;
+import io.github.cue.clipboardbridge.server.domain.port.MessageProcessor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * REST-контроллер для обработки сообщений.

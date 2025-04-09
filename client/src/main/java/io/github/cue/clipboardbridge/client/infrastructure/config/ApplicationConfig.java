@@ -36,16 +36,13 @@ public class ApplicationConfig {
      */
     @PostConstruct
     public void init() {
-        // Загружаем пользовательские настройки из файла конфигурации
         File configFile = new File(CONFIG_FILE);
         if (configFile.exists()) {
             try (FileInputStream in = new FileInputStream(configFile)) {
                 Properties userProps = new Properties();
                 userProps.load(in);
                 
-                // Проверяем, что свойство server.url существует
                 if (userProps.containsKey("server.url")) {
-                    // Добавляем настройки в окружение Spring с высоким приоритетом
                     PropertiesPropertySource propertySource = new PropertiesPropertySource(USER_CONFIG_SOURCE, userProps);
                     environment.getPropertySources().addFirst(propertySource);
                     

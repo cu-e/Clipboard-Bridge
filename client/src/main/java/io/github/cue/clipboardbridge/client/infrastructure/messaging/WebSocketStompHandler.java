@@ -32,7 +32,6 @@ public class WebSocketStompHandler extends StompSessionHandlerAdapter {
     public void afterConnected(StompSession session, StompHeaders connectedHeaders) {
         log.info("Установлено соединение с сервером сообщений. ID сессии: {}", session.getSessionId());
         
-        // Подписываемся на очередь ответов для этого пользователя
         session.subscribe("/user/queue/reply", this);
         log.info("Подписан на /user/queue/reply");
     }

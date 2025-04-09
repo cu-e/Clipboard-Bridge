@@ -24,7 +24,7 @@ public class ClientUserConfig {
     public ClientUserConfig(@Value("${target.user.id:#{null}}") Long targetUserId) {
         String userHome = System.getProperty("user.home");
         this.configFilePath = Paths.get(userHome, ".clipboard-bridge", "client-config.properties");
-        this.targetUserId = loadTargetUserId(targetUserId); // Загружаем сохраненное значение или используем из application.properties
+        this.targetUserId = loadTargetUserId(targetUserId); 
     }
 
     private Long loadTargetUserId(Long defaultValue) {
@@ -66,7 +66,6 @@ public class ClientUserConfig {
         try {
             Files.createDirectories(configFilePath.getParent());
             Properties props = new Properties();
-            // Загружаем существующие свойства, чтобы не перезатереть другие
             if (Files.exists(configFilePath)) {
                 props.load(Files.newInputStream(configFilePath));
             }

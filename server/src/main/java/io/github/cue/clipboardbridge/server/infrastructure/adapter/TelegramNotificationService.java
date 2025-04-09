@@ -1,5 +1,20 @@
 package io.github.cue.clipboardbridge.server.infrastructure.adapter;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
+
+import org.springframework.context.annotation.Lazy;
+import org.springframework.context.annotation.Primary;
+import org.springframework.stereotype.Service;
+import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
+
 import io.github.cue.clipboardbridge.server.domain.model.ReplyMessage;
 import io.github.cue.clipboardbridge.server.domain.port.NotificationService;
 import io.github.cue.clipboardbridge.server.infrastructure.port.TelegramBotApi;
@@ -7,18 +22,6 @@ import io.github.cue.clipboardbridge.server.infrastructure.port.TelegramUpdateLi
 import io.github.cue.clipboardbridge.server.infrastructure.service.ClientSessionService;
 import io.github.cue.clipboardbridge.server.infrastructure.service.WebSocketSessionMessageService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Lazy;
-import org.springframework.context.annotation.Primary;
-import org.springframework.stereotype.Service;
-import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup;
-import org.telegram.telegrambots.meta.api.objects.Message;
-import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
-
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArraySet;
 
 /**
  * Реализация сервиса уведомлений через Telegram.
@@ -29,12 +32,9 @@ import java.util.concurrent.CopyOnWriteArraySet;
 @Slf4j
 public class TelegramNotificationService implements NotificationService, TelegramUpdateListener {
 
-    // Хранение ожидающих ответов - clientId -> userId
     private final Map<String, String> pendingReplies = new ConcurrentHashMap<>();
-    // Хранение последних сообщений от пользователей - userId -> clientId
     private final Map<String, String> lastClientMessages = new ConcurrentHashMap<>();
     
-    // Хранение идентификаторов уже обработанных сообщений для предотвращения дублирования
     private final Set<String> processedMessageIds = new CopyOnWriteArraySet<>();
     
     private final TelegramBotApi telegramBotApi;
@@ -48,14 +48,12 @@ public class TelegramNotificationService implements NotificationService, Telegra
         this.telegramBotApi = telegramBotApi;
         this.sessionService = sessionService;
         this.webSocketService = webSocketService;
-        // Регистрируем себя как слушателя в адаптере бота
         this.telegramBotApi.setUpdateListener(this);
         log.info("Инициализирован TelegramNotificationService.");
     }
     
     @Override
     public void onUpdateReceived(Update update) {
-        // Проверка на дубликаты сообщений
         String messageId = getUpdateIdentifier(update);
         if (messageId != null) {
             if (processedMessageIds.contains(messageId)) {
@@ -63,13 +61,10 @@ public class TelegramNotificationService implements NotificationService, Telegra
                 return;
             }
             
-            // Добавляем в обработанные
             processedMessageIds.add(messageId);
             
-            // Удаляем старые записи, если их слишком много
             if (processedMessageIds.size() > 1000) {
                 log.debug("Очистка старых идентификаторов обработанных сообщений");
-                // Оставляем только последние 500 записей
                 List<String> tempList = new ArrayList<>(processedMessageIds);
                 tempList.sort(Comparator.naturalOrder());
                 int removeCount = tempList.size() - 500;
@@ -80,18 +75,14 @@ public class TelegramNotificationService implements NotificationService, Telegra
             }
         }
         
-        // Обработка обычных сообщений
         if (update.hasMessage() && update.getMessage().hasText()) {
             Long userId = update.getMessage().getFrom().getId();
             
-            // Получаем текст сообщения
             String messageText = update.getMessage().getText();
             log.debug("Получено сообщение от пользователя {}: {}", userId, messageText);
             
-            // Проверяем, является ли это ответом на сообщение от клиента
             String userIdStr = userId.toString();
             if (pendingReplies.containsValue(userIdStr)) {
-                // Находим clientId, которому нужно отправить ответ
                 String clientId = null;
                 for (Map.Entry<String, String> entry : pendingReplies.entrySet()) {
                     if (entry.getValue().equals(userIdStr)) {
@@ -101,41 +92,33 @@ public class TelegramNotificationService implements NotificationService, Telegra
                 }
                 
                 if (clientId != null) {
-                    // Проверяем, не равен ли clientId строке "unknown"
                     if ("unknown".equals(clientId)) {
-                        // Проверяем, есть ли сохраненный clientId для этого пользователя
                         String savedClientId = lastClientMessages.get(userIdStr);
                         if (savedClientId != null && !savedClientId.equals("unknown")) {
                             clientId = savedClientId;
                         } else {
-                            // Если нет сохраненного clientId, уведомляем пользователя
                             telegramBotApi.sendMessage(userId, "⚠️ Невозможно отправить ответ клиенту: неизвестный получатель");
                             pendingReplies.remove(clientId);
                             return;
                         }
                     }
                     
-                    // Отправляем ответ конкретному клиенту через WebSocket (возвращено)
                     if (sendReplyToClient(clientId, messageText)) {
                         telegramBotApi.sendMessage(userId, "✅ Ваш ответ отправлен клиенту!");
                     } else {
                         telegramBotApi.sendMessage(userId, "❌ Не удалось отправить ответ клиенту. Попробуйте позже.");
                     }
                     
-                    // Удаляем запись о ожидаемом ответе
                     pendingReplies.remove(clientId);
                 }
             } else if (messageText.startsWith("/reply")) {
-                // Команда для ответа на последнее сообщение от клиента
                 String clientId = lastClientMessages.get(userIdStr);
                 if (clientId != null) {
-                    // Проверяем, не равен ли clientId строке "unknown"
                     if ("unknown".equals(clientId)) {
                         telegramBotApi.sendMessage(userId, "⚠️ Невозможно ответить: неизвестный получатель");
                         return;
                     }
                     
-                    // Проверяем состояние клиента
                     if (sessionService.isSessionDisconnected(clientId)) {
                         telegramBotApi.sendMessage(userId, "⚠️ Невозможно ответить: клиент отключился");
                         return;
@@ -145,7 +128,6 @@ public class TelegramNotificationService implements NotificationService, Telegra
                         telegramBotApi.sendMessage(userId, "⚠️ Предупреждение: клиент может быть неактивен, ответ может не дойти");
                     }
                     
-                    // Готовимся к ответу
                     pendingReplies.put(clientId, userIdStr);
                     telegramBotApi.sendMessage(userId, "🔄 Введите ваш ответ для клиента:");
                 } else {
@@ -155,21 +137,18 @@ public class TelegramNotificationService implements NotificationService, Telegra
                 processCommand(userId, messageText);
             }
         }
-        // Обработка коллбэков от инлайн-кнопок
         else if (update.hasCallbackQuery()) {
             String callbackData = update.getCallbackQuery().getData();
             Long userId = update.getCallbackQuery().getFrom().getId();
             
             if (callbackData.startsWith("reply:")) {
-                String clientId = callbackData.substring(6); // Удаляем "reply:"
+                String clientId = callbackData.substring(6); 
                 
-                // Проверяем, не равен ли clientId строке "unknown"
                 if ("unknown".equals(clientId)) {
                     telegramBotApi.sendMessage(userId, "⚠️ Невозможно ответить: неизвестный получатель");
                     return;
                 }
                 
-                // Проверяем состояние клиента
                 if (sessionService.isSessionDisconnected(clientId)) {
                     telegramBotApi.sendMessage(userId, "⚠️ Невозможно ответить: клиент отключился");
                     return;
@@ -181,9 +160,7 @@ public class TelegramNotificationService implements NotificationService, Telegra
                 
                 pendingReplies.put(clientId, userId.toString());
                 
-                // Подтверждаем получение callback query
                 try {
-                    // Отправляем новое сообщение вместо редактирования
                     sendNotification(userId, "🔄 Введите ваш ответ для клиента:");
                 } catch (Exception e) {
                     log.error("Ошибка при обработке callback query: {}", e.getMessage());
@@ -216,7 +193,6 @@ public class TelegramNotificationService implements NotificationService, Telegra
      */
     private boolean sendReplyToClient(String clientId, String message) {
         try {
-            // Проверка валидности clientId
             if (clientId == null || clientId.isEmpty() || "unknown".equals(clientId)) {
                 log.error("Невозможно отправить ответ: недопустимый ID клиента: {}", clientId);
                 return false;
@@ -251,7 +227,6 @@ public class TelegramNotificationService implements NotificationService, Telegra
                     "/reply - ответить на последнее сообщение от клиента\n" +
                     "/stats - статистика клиентских соединений");
         } else if (commandLower.startsWith("/stats")) {
-            // Команда для получения статистики сессий
             Map<String, Object> stats = sessionService.getSessionStats();
             String statsMessage = String.format(
                     "📊 Статистика клиентских соединений:\n\n" +
@@ -266,7 +241,6 @@ public class TelegramNotificationService implements NotificationService, Telegra
             );
             sendNotification(userId, statsMessage);
             
-            // Очищаем данные о отключенных сессиях
             int cleanedCount = sessionService.cleanupDisconnectedSessions();
             if (cleanedCount > 0) {
                 sendNotification(userId, "🧹 Очищены данные о " + cleanedCount + " отключенных сессиях");
@@ -288,13 +262,11 @@ public class TelegramNotificationService implements NotificationService, Telegra
         String clientIdForLog = (clientId == null || clientId.isEmpty()) ? "unknown" : clientId;
         log.info("Подготовка уведомления для пользователя {} о сообщении от клиента {}", userId, clientIdForLog);
 
-        // Сохраняем ID клиента для возможного ответа через /reply
         lastClientMessages.put(userId.toString(), clientIdForLog);
 
         boolean isClientDisconnected = "unknown".equals(clientIdForLog) || sessionService.isSessionDisconnected(clientIdForLog);
         boolean isClientActive = !isClientDisconnected && sessionService.isSessionActive(clientIdForLog);
 
-        // Формируем текст сообщения
         String textToSend;
         if (isClientDisconnected) {
             Long disconnectTime = sessionService.getLastDisconnectTime(clientIdForLog);
@@ -312,7 +284,6 @@ public class TelegramNotificationService implements NotificationService, Telegra
              textToSend = "Сообщение от клиента (" + clientIdForLog + "):\n---\n" + message;
         }
 
-        // Формируем клавиатуру (только если клиент активен)
         InlineKeyboardMarkup replyMarkup = null;
         if (isClientActive) {
             List<InlineKeyboardButton> buttonRow = new ArrayList<>();
@@ -324,7 +295,6 @@ public class TelegramNotificationService implements NotificationService, Telegra
             replyMarkup = InlineKeyboardMarkup.builder().keyboardRow(buttonRow).build();
         }
 
-        // Отправляем сообщение через адаптер
         boolean sent;
         if (replyMarkup != null) {
             sent = telegramBotApi.sendMessageWithMarkup(userId, textToSend, replyMarkup);
@@ -363,7 +333,7 @@ public class TelegramNotificationService implements NotificationService, Telegra
      */
     @Override
     public int broadcastNotification(String message) {
-        List<Long> users = telegramBotApi.getBotUsers(); // Используем API
+        List<Long> users = telegramBotApi.getBotUsers();
         int successCount = 0;
         for (Long userId : users) {
             if (telegramBotApi.sendMessage(userId, message)) {

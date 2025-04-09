@@ -35,17 +35,15 @@ public class SystemClipboardService implements ClipboardService {
         try {
             if (GraphicsEnvironment.isHeadless()) {
                 log.warn("Графическая подсистема недоступна (headless окружение)");
-                // Даже в headless режиме пробуем использовать альтернативные методы
+                // Даже в headless
                 String os = System.getProperty("os.name").toLowerCase();
                 if (os.contains("win")) {
-                    // Для Windows сначала сделаем тестовое копирование в буфер обмена
                     boolean testCopy = copyToClipboardAlternative("test clipboard");
                     if (!testCopy) {
                         log.warn("Тестовое копирование в буфер обмена не удалось");
                         return false;
                     }
                     
-                    // Теперь проверим, можем ли мы прочитать буфер обмена
                     try {
                         String test = getFromClipboardAlternative();
                         log.info("Проверка доступности буфера обмена через альтернативный метод: {}", 
@@ -59,7 +57,6 @@ public class SystemClipboardService implements ClipboardService {
                 return os.contains("linux") || os.contains("unix") || os.contains("mac");
             }
             
-            // Проверка доступности системного буфера обмена
             Toolkit.getDefaultToolkit().getSystemClipboard();
             return true;
         } catch (Exception e) {
@@ -106,7 +103,6 @@ public class SystemClipboardService implements ClipboardService {
             String os = System.getProperty("os.name").toLowerCase();
             
             if (os.contains("win")) {
-                // Пробуем несколько методов для Windows по очереди
                 boolean success = copyToClipboardWindows_PowerShell(text);
                 if (!success) {
                     success = copyToClipboardWindows_ClipExe(text);
@@ -142,11 +138,9 @@ public class SystemClipboardService implements ClipboardService {
         try {
             log.debug("Копирование в буфер обмена Windows через PowerShell");
             
-            // Создаем временный файл с текстом
             Path tempFile = Files.createTempFile("clipboard", ".txt");
             Files.writeString(tempFile, text, StandardCharsets.UTF_8);
             
-            // Используем PowerShell для копирования текста из файла в буфер обмена
             String[] command = {
                 "powershell.exe", 
                 "-Command", 
@@ -156,7 +150,6 @@ public class SystemClipboardService implements ClipboardService {
             Process process = Runtime.getRuntime().exec(command);
             int exitCode = process.waitFor();
             
-            // Считываем возможные ошибки
             try (BufferedReader errorReader = new BufferedReader(
                     new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
                 String errorLine;
@@ -170,7 +163,6 @@ public class SystemClipboardService implements ClipboardService {
                 }
             }
             
-            // Удаляем временный файл
             Files.delete(tempFile);
             
             log.debug("PowerShell завершился с кодом: {}", exitCode);
@@ -188,11 +180,9 @@ public class SystemClipboardService implements ClipboardService {
         try {
             log.debug("Копирование в буфер обмена Windows через clip.exe");
             
-            // Создаем временный файл с текстом
             Path tempFile = Files.createTempFile("clipboard", ".txt");
             Files.writeString(tempFile, text, StandardCharsets.UTF_8);
             
-            // Создаем bat-файл для правильной обработки перенаправления через |
             Path batchFile = Files.createTempFile("clipboard", ".bat");
             Files.writeString(batchFile, 
                     String.format("@echo off\r\ntype \"%s\" | clip", tempFile.toString()));
@@ -200,7 +190,6 @@ public class SystemClipboardService implements ClipboardService {
             Process process = Runtime.getRuntime().exec("cmd.exe /c " + batchFile.toString());
             int exitCode = process.waitFor();
             
-            // Удаляем временные файлы
             Files.delete(tempFile);
             Files.delete(batchFile);
             
@@ -248,10 +237,8 @@ public class SystemClipboardService implements ClipboardService {
             String os = System.getProperty("os.name").toLowerCase();
             
             if (os.contains("win")) {
-                // Пробуем сначала PowerShell метод
                 String content = getFromClipboardWindows_PowerShell();
                 
-                // Если не удалось через PowerShell, пробуем другие методы
                 if (content == null) {
                     content = getFromClipboardWindows_Alternative();
                 }
@@ -283,10 +270,8 @@ public class SystemClipboardService implements ClipboardService {
         try {
             log.debug("Чтение буфера обмена Windows с помощью PowerShell и временного файла");
             
-            // Создаем временный файл для хранения содержимого буфера обмена
             Path tempFile = Files.createTempFile("clipboard_out", ".txt");
             
-            // Используем PowerShell для записи содержимого буфера в файл
             String[] command = {
                 "powershell.exe", 
                 "-Command", 
@@ -296,7 +281,6 @@ public class SystemClipboardService implements ClipboardService {
             Process process = Runtime.getRuntime().exec(command);
             int exitCode = process.waitFor();
             
-            // Считываем возможные ошибки
             try (BufferedReader errorReader = new BufferedReader(
                     new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
                 String errorLine;
@@ -313,7 +297,6 @@ public class SystemClipboardService implements ClipboardService {
             log.debug("PowerShell завершился с кодом: {}, выходной файл: {}", exitCode, tempFile);
             
             if (exitCode == 0) {
-                // Проверяем, что файл действительно создан и не пуст
                 File file = tempFile.toFile();
                 if (file.exists() && file.length() > 0) {
                     String content = Files.readString(tempFile, StandardCharsets.UTF_8);
@@ -330,11 +313,9 @@ public class SystemClipboardService implements ClipboardService {
                 }
             }
             
-            // Удаляем временный файл
             try {
                 Files.delete(tempFile);
             } catch (Exception e) {
-                // Игнорируем, если файл не может быть удален
             }
             
             log.warn("Не удалось прочитать буфер обмена через PowerShell");
@@ -352,14 +333,12 @@ public class SystemClipboardService implements ClipboardService {
         try {
             log.debug("Прямое чтение буфера обмена Windows с помощью PowerShell");
             
-            // Используем PowerShell с прямым выводом
             ProcessBuilder pb = new ProcessBuilder(
                 "powershell.exe", "-Command", "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::GetText()"
             );
             
             Process process = pb.start();
             
-            // Ждем завершения и читаем вывод
             StringBuilder output = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {

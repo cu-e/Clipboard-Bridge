@@ -1,15 +1,15 @@
 package io.github.cue.clipboardbridge.server.infrastructure.config;
 
-import lombok.extern.slf4j.Slf4j;
+import java.security.Principal;
+import java.util.Map;
+import java.util.UUID;
+
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
-import org.springframework.web.socket.server.support.DefaultHandshakeHandler;
 
-import java.security.Principal;
-import java.util.Map;
-import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Перехватчик рукопожатия WebSocket для установки Principal.
@@ -24,14 +24,11 @@ public class DefaultPrincipalHandshakeInterceptor implements HandshakeIntercepto
     @Override
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                   WebSocketHandler wsHandler, Map<String, Object> attributes) {
-        // Генерируем уникальный идентификатор для пользователя, если он отсутствует
         final String sessionId = UUID.randomUUID().toString();
         log.info("Установка Principal для WebSocket соединения: {}", sessionId);
         
-        // Устанавливаем Principal в атрибуты сессии
         attributes.put("PRINCIPAL", new StompPrincipal(sessionId));
         
-        // Добавляем ID сессии для отслеживания
         attributes.put("CLIENT_ID", sessionId);
         
         return true;
@@ -43,7 +40,6 @@ public class DefaultPrincipalHandshakeInterceptor implements HandshakeIntercepto
     @Override
     public void afterHandshake(ServerHttpRequest request, ServerHttpResponse response,
                               WebSocketHandler wsHandler, Exception exception) {
-        // Проверяем на наличие ошибок
         if (exception != null) {
             log.error("Ошибка при установке WebSocket-соединения: {}", exception.getMessage());
         }

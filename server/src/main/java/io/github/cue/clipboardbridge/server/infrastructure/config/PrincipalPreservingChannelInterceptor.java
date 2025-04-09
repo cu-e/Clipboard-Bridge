@@ -1,13 +1,14 @@
 package io.github.cue.clipboardbridge.server.infrastructure.config;
 
-import lombok.extern.slf4j.Slf4j;
+import java.security.Principal;
+
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 
-import java.security.Principal;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Перехватчик сообщений для сохранения Principal между SockJS и STOMP сообщениями.
@@ -29,7 +30,6 @@ public class PrincipalPreservingChannelInterceptor implements ChannelInterceptor
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         
         if (accessor != null) {
-            // Получаем Principal из сессии
             Principal principal = accessor.getUser();
             
             if (principal != null) {
@@ -38,7 +38,6 @@ public class PrincipalPreservingChannelInterceptor implements ChannelInterceptor
             } else {
                 log.debug("Channel Interceptor - Principal отсутствует");
                 
-                // Проверяем атрибуты сессии
                 Object sessionPrincipal = accessor.getSessionAttributes() != null ? 
                         accessor.getSessionAttributes().get("PRINCIPAL") : null;
                 

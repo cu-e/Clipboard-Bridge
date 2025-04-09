@@ -1,24 +1,24 @@
 package io.github.cue.clipboardbridge.server.infrastructure.adapter;
 
-import io.github.cue.clipboardbridge.server.infrastructure.port.TelegramBotApi;
-import io.github.cue.clipboardbridge.server.infrastructure.port.TelegramUpdateListener;
-import lombok.extern.slf4j.Slf4j;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-
-import jakarta.annotation.PostConstruct;
-import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import io.github.cue.clipboardbridge.server.infrastructure.port.TelegramBotApi;
+import io.github.cue.clipboardbridge.server.infrastructure.port.TelegramUpdateListener;
+import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Адаптер для взаимодействия с Telegram Bot API.
@@ -81,7 +81,6 @@ public class TelegramBotAdapter extends TelegramLongPollingBot implements Telegr
                     }
                 }
                 
-                // Передаем обновление слушателю
                 updateListener.onUpdateReceived(update);
             } catch (Exception e) {
                 log.error("Ошибка при передаче обновления слушателю {}: {}", updateListener.getClass().getSimpleName(), e.getMessage(), e);

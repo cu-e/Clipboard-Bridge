@@ -52,14 +52,10 @@ public class ServerConfig {
                     
                     String savedUrl = props.getProperty(SERVER_URL_PROPERTY);
                     if (savedUrl != null && !savedUrl.isEmpty()) {
-                        // В конструкторе мы можем только загрузить значение из файла
-                        // но не можем присвоить его полю serverUrl, так как оно будет перезаписано Spring
-                        // после инициализации бина
                         log.info("Найден сохраненный URL сервера: {}", savedUrl);
                     }
                 }
             } else {
-                // Если файл конфигурации не существует, создаем его с дефолтными значениями
                 saveConfig();
                 log.info("Создан файл конфигурации с URL сервера по умолчанию: {}", DEFAULT_SERVER_URL);
             }
@@ -96,7 +92,6 @@ public class ServerConfig {
                 }
             }
             
-            // Используем текущее значение serverUrl или дефолтное, если оно null
             String urlToSave = (serverUrl != null) ? serverUrl : DEFAULT_SERVER_URL;
             props.setProperty(SERVER_URL_PROPERTY, urlToSave);
             

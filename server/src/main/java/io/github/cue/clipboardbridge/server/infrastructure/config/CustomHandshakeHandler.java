@@ -1,12 +1,13 @@
 package io.github.cue.clipboardbridge.server.infrastructure.config;
 
-import lombok.extern.slf4j.Slf4j;
+import java.security.Principal;
+import java.util.Map;
+
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.support.DefaultHandshakeHandler;
 
-import java.security.Principal;
-import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Пользовательский обработчик рукопожатия WebSocket.
@@ -27,7 +28,6 @@ public class CustomHandshakeHandler extends DefaultHandshakeHandler {
     protected Principal determineUser(ServerHttpRequest request, 
                                      WebSocketHandler wsHandler, 
                                      Map<String, Object> attributes) {
-        // Получаем Principal из атрибутов, установленных в перехватчике
         Object principalObject = attributes.get("PRINCIPAL");
         if (principalObject instanceof Principal) {
             Principal principal = (Principal) principalObject;
@@ -35,7 +35,6 @@ public class CustomHandshakeHandler extends DefaultHandshakeHandler {
             return principal;
         }
         
-        // Получаем ID клиента из атрибутов
         Object clientIdObject = attributes.get("CLIENT_ID");
         if (clientIdObject instanceof String) {
             String clientId = (String) clientIdObject;
@@ -43,7 +42,6 @@ public class CustomHandshakeHandler extends DefaultHandshakeHandler {
             return new DefaultPrincipalHandshakeInterceptor.StompPrincipal(clientId);
         }
         
-        // Если Principal не найден, используем Principal из запроса или null
         Principal requestPrincipal = request.getPrincipal();
         if (requestPrincipal != null) {
             log.info("Использование Principal из запроса: {}", requestPrincipal.getName());

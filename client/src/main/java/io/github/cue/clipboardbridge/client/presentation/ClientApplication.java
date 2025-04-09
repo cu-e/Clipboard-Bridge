@@ -30,7 +30,6 @@ public class ClientApplication implements CommandLineRunner, ServerReplyListener
     private final CommandLineProcessor commandLineProcessor;
     private final ClientUserConfig clientUserConfig;
 
-    // Future для ожидания завершения обработки (успешного копирования или ошибки)
     private final CompletableFuture<Void> processingCompleteFuture = new CompletableFuture<>();
 
     /**
